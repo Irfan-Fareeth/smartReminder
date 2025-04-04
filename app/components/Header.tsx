@@ -1,56 +1,44 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Animated,
+  StyleSheet,
   Dimensions,
-  TouchableWithoutFeedback,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const { width, height } = Dimensions.get('window');
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const Header = () => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const drawerAnim = useRef(new Animated.Value(-width)).current;
-
+const Header = ({ isTodoVisible, onToggleView }) => {
+  const drawerAnim = useRef(new Animated.Value(-SCREEN_WIDTH)).current;
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const toggleDrawer = () => {
-    if (isDrawerOpen) {
-      Animated.timing(drawerAnim, {
-        toValue: -width,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setIsDrawerOpen(false));
-    } else {
-      setIsDrawerOpen(true);
-      Animated.timing(drawerAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
+    const toValue = drawerOpen ? -SCREEN_WIDTH : 0;
+    Animated.timing(drawerAnim, {
+      toValue,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setDrawerOpen(!drawerOpen);
+    });
   };
 
   return (
     <>
-      {/* Drawer Overlay */}
-      {isDrawerOpen && (
-        <TouchableWithoutFeedback onPress={toggleDrawer}>
-          <View style={styles.overlay} />
-        </TouchableWithoutFeedback>
+      {/* Overlay */}
+      {drawerOpen && (
+        <Pressable style={styles.overlay} onPress={toggleDrawer} />
       )}
 
       {/* Drawer */}
-      <Animated.View
-        style={[
-          styles.drawer,
-          {
-            transform: [{ translateX: drawerAnim }],
-          },
-        ]}
-      >
+      <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerAnim }] }]}>
+        <TouchableOpacity onPress={toggleDrawer} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#f1f5f9" />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
         <Text style={styles.drawerItem}>🏠 Home</Text>
         <Text style={styles.drawerItem}>🕑 Alarms</Text>
         <Text style={styles.drawerItem}>⚙️ Settings</Text>
@@ -63,6 +51,13 @@ const Header = () => {
           <Ionicons name="menu" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerText}>SmartReminder</Text>
+        <TouchableOpacity onPress={onToggleView} style={styles.toggleButton}>
+          <Ionicons
+            name={isTodoVisible ? 'alarm-outline' : 'checkmark-done-outline'}
+            size={24}
+            color="#ffffff"
+          />
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -70,55 +65,58 @@ const Header = () => {
 
 const styles = StyleSheet.create({
   headerContainer: {
-    width: '100%',
-    paddingVertical: 20,
-    marginBottom: 10,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#0f172a',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    shadowColor: '#1e40af',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  menuButton: {
-    marginRight: 12,
   },
   headerText: {
-    fontSize: 28,
-    fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: 1,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 16,
+  },
+  menuButton: {
+    padding: 8,
+  },
+  toggleButton: {
+    marginLeft: 'auto',
+    padding: 8,
   },
   drawer: {
     position: 'absolute',
     top: 0,
+    bottom: 0,
     left: 0,
-    width: width * 0.7,
-    height: height,
+    width: SCREEN_WIDTH * 0.7,
     backgroundColor: '#1e293b',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    zIndex: 10,
+    padding: 20,
+    zIndex: 1000,
   },
   drawerItem: {
-    color: '#ffffff',
-    fontSize: 20,
-    marginVertical: 15,
-    borderBottomColor: '#475569',
-    borderBottomWidth: 1,
-    paddingBottom: 8,
+    color: '#f1f5f9',
+    fontSize: 18,
+    marginVertical: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  backText: {
+    color: '#f1f5f9',
+    fontSize: 18,
+    marginLeft: 8,
   },
   overlay: {
     position: 'absolute',
-    width,
-    height,
     top: 0,
+    bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 5,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
   },
 });
 

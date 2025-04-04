@@ -8,13 +8,25 @@ import {
   TextInput,
   Modal,
   ScrollView,
-  StyleSheet
+  StyleSheet,
 } from 'react-native';
-import { SetStateAction, useEffect, useState } from 'react';
+import { SetStateAction, useEffect, useState, useRef } from 'react';
 import { Picker } from '@react-native-picker/picker';
 import { Audio } from 'expo-av';
-import PuzzleComponent from './puzzleComponent'; // ✅ Import
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import PuzzleComponent from './puzzleComponent';
 import Header from './Header';
+
+// Notification configuration
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export default function SmartAlarm() {
   const [alarms, setAlarms] = useState<{ time: string; audio: string; id: string }[]>([]);
   const [tempTime, setTempTime] = useState('');
@@ -26,12 +38,11 @@ export default function SmartAlarm() {
   const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [mode, setMode] = useState<'puzzle' | 'todo'>('puzzle');
-
   const [puzzleAnswer, setPuzzleAnswer] = useState('');
+  const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
+
   const isPuzzleSolved = puzzleAnswer.trim() === '7';
-
   const audioOptions = ['default', 'beep', 'chime', 'ringtone'];
-
   const audioFiles: Record<string, any> = {
     default: require('../../assets/vizhiye.mp3'),
     beep: require('../../assets/saachitale.mp3'),
@@ -39,12 +50,38 @@ export default function SmartAlarm() {
     ringtone: require('../../assets/avesham.mp3'),
   };
 
+  // Register for push notifications
+  useEffect(() => {
+    const registerForPushNotifications = async () => {
+      if (Constants.isDevice) {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+
+        if (finalStatus !== 'granted') {
+          Alert.alert('Failed to get push token for notifications!');
+          return;
+        }
+
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        setExpoPushToken(tokenData.data);
+      } else {
+        console.log('Must use physical device for push notifications');
+      }
+    };
+    registerForPushNotifications();
+  }, []);
+
   const handleWebTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = e.target.value;
     if (newTime) setTempTime(newTime);
   };
 
-  const handleSetAlarm = () => {
+  const handleSetAlarm = async () => {
     if (tempTime) {
       const alarmId = `${tempTime}-${selectedAudio}`;
       const exists = alarms.some((a) => a.id === alarmId);
@@ -52,8 +89,23 @@ export default function SmartAlarm() {
         Alert.alert('Alarm already exists!');
         return;
       }
+
       setAlarms((prev) => [...prev, { time: tempTime, audio: selectedAudio, id: alarmId }]);
       setSelectedAudio('default');
+
+      const [h, m] = tempTime.split(':').map(Number);
+      const now = new Date();
+      const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+      if (alarmDate <= now) alarmDate.setDate(alarmDate.getDate() + 1);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '⏰ Alarm Alert',
+          body: `Alarm set for ${tempTime}`,
+          sound: true,
+        },
+        trigger: alarmDate,
+      });
     }
   };
 
@@ -136,7 +188,6 @@ export default function SmartAlarm() {
     }
 
     const key = currentlyRinging;
-
     setCurrentlyRinging(null);
     setModalVisible(false);
 
@@ -170,7 +221,6 @@ export default function SmartAlarm() {
 
   return (
     <View style={styles.container}>
-      <Header/>
       <Text style={styles.currentTimeText}>Current Time: {currentTime}</Text>
 
       {Platform.OS === 'web' ? (
@@ -223,7 +273,7 @@ export default function SmartAlarm() {
         <Text style={styles.alarmsHeader}>Upcoming Alarms:</Text>
         {upcoming.map((alarm) => (
           <View key={alarm.id} style={styles.alarmItem}>
-            <Text>• {alarm.time} - Audio: {alarm.audio}</Text>
+            <Text style={{ color: '#f8fafc' }}>• {alarm.time} - Audio: {alarm.audio}</Text>
             <Button title="Delete" color="red" onPress={() => deleteAlarm(alarm.id)} />
           </View>
         ))}
@@ -231,20 +281,16 @@ export default function SmartAlarm() {
         <Text style={[styles.alarmsHeader, { marginTop: 20 }]}>Past Alarms:</Text>
         {past.map((alarm) => (
           <View key={alarm.id} style={styles.alarmItem}>
-            <Text>• {alarm.time} - Audio: {alarm.audio}</Text>
+            <Text style={{ color: '#f8fafc' }}>• {alarm.time} - Audio: {alarm.audio}</Text>
             <Button title="Delete" color="red" onPress={() => deleteAlarm(alarm.id)} />
           </View>
         ))}
       </ScrollView>
 
       <Modal visible={modalVisible} animationType="slide" transparent={false}>
-        <View style={[styles.fullScreenModal, mode === 'puzzle' && { backgroundColor: '#0f172a' }]}>
-          <Text style={[styles.modalTitle, mode === 'puzzle' && { color: '#fbbf24' }]}>
-            Alarm Ringing! 🔔
-          </Text>
-          <Text style={[styles.modalSubtitle, mode === 'puzzle' && { color: '#e2e8f0' }]}>
-            Mode: {mode === 'puzzle' ? 'Solve Puzzle' : 'To-Do List'}
-          </Text>
+        <View style={[styles.fullScreenModal, { backgroundColor: '#0f172a' }]}>
+          <Text style={styles.modalTitle}>Alarm Ringing! 🔔</Text>
+          <Text style={styles.modalSubtitle}>Mode: {mode === 'puzzle' ? 'Solve Puzzle' : 'To-Do List'}</Text>
 
           {mode === 'puzzle' ? (
             <PuzzleComponent
@@ -273,189 +319,101 @@ export default function SmartAlarm() {
   );
 }
 
-// ✅ Keep your existing styles object
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
+    paddingTop: 10,
     backgroundColor: '#0f172a',
-    paddingHorizontal: 20,
-    paddingTop: 40,
   },
   currentTimeText: {
-    fontSize: 28,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#f8fafc',
-    textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 12,
   },
   input: {
-    width: '100%',
-    padding: 15,
-    fontSize: 18,
-    borderRadius: 14,
-    backgroundColor: '#1e293b',
-    color: '#f8fafc',
-    borderColor: '#3b82f6',
+    height: 40,
+    borderColor: '#94a3b8',
     borderWidth: 1,
-    marginBottom: 20,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    backgroundColor: '#f1f5f9',
+    color: '#0f172a',
   },
   pickerContainer: {
-    width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#3b82f6',
-  },
-  select: {
-    width: '100%',
-    padding: 14,
-    fontSize: 16,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    color: '#f8fafc',
-    borderColor: '#3b82f6',
-    borderWidth: 1,
+    marginBottom: 12,
   },
   picker: {
-    color: '#f8fafc',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+  },
+  select: {
+    height: 40,
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 10,
   },
   setButton: {
     backgroundColor: '#3b82f6',
-    paddingVertical: 14,
-    paddingHorizontal: 50,
-    borderRadius: 14,
-    marginBottom: 30,
-    shadowColor: '#60a5fa',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginBottom: 16,
   },
   setButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   alarmsList: {
     flex: 1,
+    marginTop: 10,
   },
   alarmsHeader: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#e2e8f0',
-    marginVertical: 10,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#facc15',
   },
   alarmItem: {
-    backgroundColor: '#334155',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    backgroundColor: '#1e293b',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
   },
   fullScreenModal: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
-    padding: 30,
+    padding: 20,
   },
   modalTitle: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#facc15',
     marginBottom: 10,
-    textAlign: 'center',
+    color: '#fbbf24',
   },
   modalSubtitle: {
     fontSize: 18,
-    color: '#cbd5e1',
     marginBottom: 20,
-    textAlign: 'center',
-  },
-  inputBox: {
-    fontSize: 24,
-    color: '#fef9c3',
-    borderBottomWidth: 2,
-    borderBottomColor: '#facc15',
-    textAlign: 'center',
-    marginVertical: 20,
-    width: 100,
-  },
-  checkButton: {
-    backgroundColor: '#22c55e',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    shadowColor: '#22c55e',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 5,
-    marginBottom: 15,
-  },
-  disabledButton: {
-    backgroundColor: '#64748b',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-  buttonText: {
-    fontSize: 16,
-    color: '#ffffff',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  snoozeButton: {
-    backgroundColor: '#facc15',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginRight: 10,
-    shadowColor: '#fde68a',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  stopButton: {
-    backgroundColor: '#ef4444',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    shadowColor: '#f87171',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  controlButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    color: '#e2e8f0',
   },
   todoItem: {
-    fontSize: 20,
-    color: '#10b981',
-    padding: 10,
-    backgroundColor: '#064e3b',
-    marginVertical: 6,
-    borderRadius: 8,
+    fontSize: 18,
+    color: '#f8fafc',
+    marginBottom: 10,
+    backgroundColor: '#475569',
+    padding: 12,
+    borderRadius: 6,
+    width: 240,
     textAlign: 'center',
-    width: 260,
-  },
-  modeSwitchText: {
-    marginTop: 30,
-    fontSize: 16,
-    color: '#3b82f6',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });

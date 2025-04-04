@@ -17,7 +17,7 @@ type Props = {
 };
 
 const wordList = ['cat', 'plant', 'alarm', 'react', 'clock', 'night', 'smart', 'brain'];
-const colorList = ['Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Purple'];
+const colorList = ['Red', 'Blue', 'Green', 'Purple', 'Orange', 'Gray'];
 
 const scrambleWord = (word: string) => {
   return word.split('').sort(() => 0.5 - Math.random()).join('');
@@ -27,6 +27,24 @@ const getRandomColorSequence = (length: number) => {
   return Array.from({ length }, () => colorList[Math.floor(Math.random() * colorList.length)]);
 };
 
+const logicQuestions = [
+  {
+    question: 'Which is the largest number?',
+    options: ['7', '3', '9', '5'],
+    answer: '9',
+  },
+  {
+    question: 'Which one does not belong?',
+    options: ['Dog', 'Cat', 'Car', 'Rabbit'],
+    answer: 'Car',
+  },
+  {
+    question: 'Which number is odd?',
+    options: ['2', '6', '4', '5'],
+    answer: '5',
+  },
+];
+
 const PuzzleComponent: React.FC<Props> = ({
   puzzleAnswer,
   setPuzzleAnswer,
@@ -34,23 +52,29 @@ const PuzzleComponent: React.FC<Props> = ({
   onSnooze,
   onStop,
 }) => {
-  const [puzzleType, setPuzzleType] = useState<'math' | 'scramble' | 'memory'>('math');
+  const [puzzleType, setPuzzleType] = useState<'math' | 'scramble' | 'logic' | 'memory'>('math');
   const [correctWord, setCorrectWord] = useState('cat');
   const [scrambledWord, setScrambledWord] = useState(scrambleWord('cat'));
+  const [logicQ, setLogicQ] = useState(logicQuestions[0]);
   const [colorSequence, setColorSequence] = useState<string[]>([]);
   const [showColors, setShowColors] = useState(false);
+  const [isPuzzleStarted, setIsPuzzleStarted] = useState(false);
   const fadeAnim = useState(new Animated.Value(0))[0];
 
-  useEffect(() => {
-    const types = ['math', 'scramble', 'memory'] as const;
+  const setupPuzzle = () => {
+    const types = ['math', 'scramble', 'logic', 'memory'] as const;
     const randomType = types[Math.floor(Math.random() * types.length)];
     setPuzzleType(randomType);
     setPuzzleAnswer('');
+    setIsPuzzleStarted(false);
 
     if (randomType === 'scramble') {
       const newWord = wordList[Math.floor(Math.random() * wordList.length)];
       setCorrectWord(newWord);
       setScrambledWord(scrambleWord(newWord));
+    } else if (randomType === 'logic') {
+      const newQ = logicQuestions[Math.floor(Math.random() * logicQuestions.length)];
+      setLogicQ(newQ);
     } else if (randomType === 'memory') {
       const sequence = getRandomColorSequence(4);
       setColorSequence(sequence);
@@ -58,15 +82,19 @@ const PuzzleComponent: React.FC<Props> = ({
       setTimeout(() => setShowColors(false), 5000);
     }
 
+    fadeAnim.setValue(0);
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
       useNativeDriver: true,
     }).start();
-  }, []);
+  };
+
+  useEffect(setupPuzzle, []);
 
   const isScrambleCorrect = puzzleAnswer.trim().toLowerCase() === correctWord;
   const isMathCorrect = puzzleAnswer.trim() === '7';
+  const isLogicCorrect = puzzleAnswer.trim().toLowerCase() === logicQ.answer.toLowerCase();
   const isMemoryCorrect =
     puzzleAnswer.trim().toLowerCase().replace(/\s+/g, '') ===
     colorSequence.join('').toLowerCase();
@@ -76,59 +104,88 @@ const PuzzleComponent: React.FC<Props> = ({
       ? isMathCorrect
       : puzzleType === 'scramble'
       ? isScrambleCorrect
+      : puzzleType === 'logic'
+      ? isLogicCorrect
       : isMemoryCorrect;
 
+  const handlePuzzleAction = (action: 'snooze' | 'stop') => {
+    if (!isPuzzleStarted) return;
+    if (solved) {
+      action === 'snooze' ? onSnooze() : onStop();
+    }
+  };
+
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <Text style={styles.header}>🔔 Solve to Dismiss</Text>
-
-      {puzzleType === 'math' && (
-        <Text style={styles.puzzleText}>🧩 What is 3 + 4?</Text>
-      )}
-
-      {puzzleType === 'scramble' && (
-        <Text style={styles.puzzleText}>
-          🔤 Unscramble this: <Text style={styles.scrambledWord}>{scrambledWord.toUpperCase()}</Text>
-        </Text>
-      )}
-
-      {puzzleType === 'memory' && (
-        <Text style={styles.puzzleText}>
-          {showColors
-            ? `🧠 Memorize: ${colorSequence.join(' - ')}`
-            : '🧠 Enter the color sequence (no spaces)'}
-        </Text>
-      )}
-
-      <TextInput
-        value={puzzleAnswer}
-        onChangeText={setPuzzleAnswer}
-        placeholder="Type your answer"
-        placeholderTextColor="#94a3b8"
-        keyboardType={puzzleType === 'math' ? 'numeric' : 'default'}
-        autoCapitalize="none"
-        style={styles.input}
-      />
-      {!solved && <Text style={styles.hint}>🛑 Solve the puzzle to snooze/stop</Text>}
-
-      <View style={styles.controlButtons}>
-        <TouchableOpacity
-          style={[styles.snoozeButton, { opacity: !solved ? 0.5 : 1 }]}
-          onPress={onSnooze}
-          disabled={!solved}
-        >
-          <Text style={styles.controlButtonText}>Snooze</Text>
+    <View style={{ position: 'relative', width: '100%' }}>
+      {!isPuzzleStarted && (
+        <TouchableOpacity style={styles.blurOverlay} onPress={() => setIsPuzzleStarted(true)}>
+          <Text style={styles.blurText}>Tap anywhere to begin puzzle to snooze or stop</Text>
         </TouchableOpacity>
+      )}
 
-        <TouchableOpacity
-          style={[styles.stopButton, { opacity: !solved ? 0.5 : 1 }]}
-          onPress={onStop}
-          disabled={!solved}
-        >
-          <Text style={styles.controlButtonText}>Stop</Text>
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        <Text style={styles.header}>Solve to Dismiss</Text>
+
+        {puzzleType === 'math' && <Text style={styles.puzzleText}>What is 3 + 4?</Text>}
+
+        {puzzleType === 'scramble' && (
+          <Text style={styles.puzzleText}>
+            Unscramble this:{' '}
+            <Text style={styles.scrambledWord}>{scrambledWord.toUpperCase()}</Text>
+          </Text>
+        )}
+
+        {puzzleType === 'logic' && (
+          <>
+            <Text style={styles.puzzleText}>{logicQ.question}</Text>
+            <Text style={styles.logicOptions}>{logicQ.options.join('   ')}</Text>
+          </>
+        )}
+
+        {puzzleType === 'memory' && (
+          <Text style={styles.puzzleText}>
+            {showColors
+              ? `Memorize: ${colorSequence.join(' - ')}`
+              : 'Enter the color sequence (no spaces)'}
+          </Text>
+        )}
+
+        <TextInput
+          value={puzzleAnswer}
+          onChangeText={setPuzzleAnswer}
+          placeholder="Type your answer"
+          placeholderTextColor="#94a3b8"
+          keyboardType={puzzleType === 'math' ? 'numeric' : 'default'}
+          autoCapitalize="none"
+          style={styles.input}
+          editable={isPuzzleStarted}
+        />
+
+        {!solved && isPuzzleStarted && (
+          <Text style={styles.hint}>Solve the puzzle to snooze/stop</Text>
+        )}
+
+        <View style={styles.controlButtons}>
+          <TouchableOpacity
+            style={[styles.snoozeButton, { opacity: solved ? 1 : 0.5 }]}
+            onPress={() => handlePuzzleAction('snooze')}
+          >
+            <Text style={styles.controlButtonText}>Snooze</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.stopButton, { opacity: solved ? 1 : 0.5 }]}
+            onPress={() => handlePuzzleAction('stop')}
+          >
+            <Text style={styles.controlButtonText}>Stop</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={setupPuzzle} style={styles.refreshButton}>
+          <Text style={styles.refreshText}>🔁 Refresh Puzzle</Text>
         </TouchableOpacity>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -138,6 +195,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     padding: 20,
+    paddingTop: 0,
     backgroundColor: '#0f172a',
     borderRadius: 20,
     marginHorizontal: 10,
@@ -146,14 +204,20 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#fcd34d',
+    color: '#38bdf8',
     marginBottom: 20,
   },
   puzzleText: {
     fontSize: 20,
     color: '#f8fafc',
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  logicOptions: {
+    fontSize: 18,
+    color: '#94a3b8',
+    marginBottom: 12,
     textAlign: 'center',
   },
   scrambledWord: {
@@ -185,12 +249,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   snoozeButton: {
-    backgroundColor: '#facc15',
+    backgroundColor: '#3b82f6',
     paddingVertical: 14,
     paddingHorizontal: 30,
     borderRadius: 12,
     marginRight: 10,
-    shadowColor: '#fef08a',
+    shadowColor: '#93c5fd',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
@@ -211,5 +275,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  refreshButton: {
+    marginTop: 20,
+    backgroundColor: '#1e293b',
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    borderColor: '#38bdf8',
+    borderWidth: 1,
+  },
+  refreshText: {
+    color: '#38bdf8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  blurText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '600',
+    paddingHorizontal: 20,
+    textAlign: 'center',
   },
 });
