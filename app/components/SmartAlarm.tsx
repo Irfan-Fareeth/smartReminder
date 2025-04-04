@@ -10,13 +10,16 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { SetStateAction, useEffect, useState, useRef } from 'react';
+import { SetStateAction, useEffect, useState } from 'react';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PuzzleComponent from './puzzleComponent';
-import Header from './Header';
+
 
 // Notification configuration
 Notifications.setNotificationHandler({
@@ -28,7 +31,8 @@ Notifications.setNotificationHandler({
 });
 
 export default function SmartAlarm() {
-  const [alarms, setAlarms] = useState<{ time: string; audio: string; id: string }[]>([]);
+  // State variables
+  const [alarms, setAlarms] = useState<{ time: string; audio: string; id: string; notificationId?: string }[]>([]);
   const [tempTime, setTempTime] = useState('');
   const [selectedAudio, setSelectedAudio] = useState('default');
   const [currentTime, setCurrentTime] = useState('');
@@ -40,7 +44,19 @@ export default function SmartAlarm() {
   const [mode, setMode] = useState<'puzzle' | 'todo'>('puzzle');
   const [puzzleAnswer, setPuzzleAnswer] = useState('');
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(() => {
+    if (tempTime) {
+      const [hours, minutes] = tempTime.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours);
+      date.setMinutes(minutes);
+      return date;
+    }
+    return new Date();
+  });
 
+  // Constants
   const isPuzzleSolved = puzzleAnswer.trim() === '7';
   const audioOptions = ['default', 'beep', 'chime', 'ringtone'];
   const audioFiles: Record<string, any> = {
@@ -50,7 +66,68 @@ export default function SmartAlarm() {
     ringtone: require('../../assets/avesham.mp3'),
   };
 
-  // Register for push notifications
+  // Load alarms from storage on component mount
+  useEffect(() => {
+    const loadAlarms = async () => {
+      try {
+        const storedAlarms = await AsyncStorage.getItem('alarms');
+        if (storedAlarms) {
+          setAlarms(JSON.parse(storedAlarms));
+        }
+      } catch (error) {
+        console.error('Error loading alarms:', error);
+      }
+    };
+    
+    loadAlarms();
+  }, []);
+
+  // Save alarms to storage whenever they change
+  useEffect(() => {
+    const saveAlarms = async () => {
+      try {
+        await AsyncStorage.setItem('alarms', JSON.stringify(alarms));
+      } catch (error) {
+        console.error('Error saving alarms:', error);
+      }
+    };
+    
+    saveAlarms();
+  }, [alarms]);
+
+  // Time picker handler
+  const handleTimePickerChange = (event: any, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+      if (date) {
+        setSelectedTime(date);
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        setTempTime(`${hours}:${minutes}`);
+      }
+      return;
+    }
+
+    if (date) {
+      setSelectedTime(date);
+    }
+    
+    if (event.type === 'set' && date) {
+      setShowTimePicker(false);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      setTempTime(`${hours}:${minutes}`);
+    }
+  };
+
+  const handleConfirmTime = () => {
+    const hours = selectedTime.getHours().toString().padStart(2, '0');
+    const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+    setTempTime(`${hours}:${minutes}`);
+    setShowTimePicker(false);
+  };
+
+  // Notification setup
   useEffect(() => {
     const registerForPushNotifications = async () => {
       if (Constants.isDevice) {
@@ -76,11 +153,7 @@ export default function SmartAlarm() {
     registerForPushNotifications();
   }, []);
 
-  const handleWebTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = e.target.value;
-    if (newTime) setTempTime(newTime);
-  };
-
+  // Set alarm function
   const handleSetAlarm = async () => {
     if (tempTime) {
       const alarmId = `${tempTime}-${selectedAudio}`;
@@ -90,15 +163,12 @@ export default function SmartAlarm() {
         return;
       }
 
-      setAlarms((prev) => [...prev, { time: tempTime, audio: selectedAudio, id: alarmId }]);
-      setSelectedAudio('default');
-
       const [h, m] = tempTime.split(':').map(Number);
       const now = new Date();
       const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
       if (alarmDate <= now) alarmDate.setDate(alarmDate.getDate() + 1);
 
-      await Notifications.scheduleNotificationAsync({
+      const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: '⏰ Alarm Alert',
           body: `Alarm set for ${tempTime}`,
@@ -106,13 +176,20 @@ export default function SmartAlarm() {
         },
         trigger: alarmDate,
       });
+
+      const newAlarm = { 
+        time: tempTime, 
+        audio: selectedAudio, 
+        id: alarmId,
+        notificationId: notificationId 
+      };
+      
+      setAlarms((prev) => [...prev, newAlarm]);
+      setSelectedAudio('default');
     }
   };
 
-  const deleteAlarm = (id: string) => {
-    setAlarms((prev) => prev.filter((a) => a.id !== id));
-  };
-
+  // Time tracking effect
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -141,6 +218,7 @@ export default function SmartAlarm() {
     return () => clearInterval(interval);
   }, [alarms, triggeredAlarms, currentlyRinging]);
 
+  // Audio functions
   const playAudio = async (audio: string, key: string) => {
     try {
       if (currentSound) {
@@ -206,6 +284,15 @@ export default function SmartAlarm() {
     setSnoozeTimeout(newSnoozeTimeout);
   };
 
+  // Alarm list functions
+  const deleteAlarm = async (id: string) => {
+    const alarmToDelete = alarms.find(a => a.id === id);
+    if (alarmToDelete?.notificationId) {
+      await Notifications.cancelScheduledNotificationAsync(alarmToDelete.notificationId);
+    }
+    setAlarms((prev) => prev.filter((a) => a.id !== id));
+  };
+
   const getUpcomingAndPast = () => {
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -223,52 +310,74 @@ export default function SmartAlarm() {
     <View style={styles.container}>
       <Text style={styles.currentTimeText}>Current Time: {currentTime}</Text>
 
-      {Platform.OS === 'web' ? (
-        <input
-          type="time"
-          value={tempTime}
-          onChange={handleWebTimeChange}
-          style={styles.input}
-        />
-      ) : (
-        <TextInput
-          value={tempTime}
-          onChangeText={(text) => setTempTime(text)}
-          placeholder="HH:MM"
-          style={styles.input}
-        />
+      {/* Time Picker Section */}
+      <TouchableOpacity 
+        onPress={() => {
+          const initialTime = tempTime 
+            ? (() => {
+                const [hours, minutes] = tempTime.split(':').map(Number);
+                const date = new Date();
+                date.setHours(hours);
+                date.setMinutes(minutes);
+                return date;
+              })()
+            : new Date();
+          setSelectedTime(initialTime);
+          setShowTimePicker(true);
+        }}
+        style={styles.timeInputButton}
+      >
+        <MaterialIcons name="access-time" size={24} color="#3b82f6" />
+        <Text style={styles.timeInputText}>
+          {tempTime || 'Select Alarm Time'}
+        </Text>
+        {tempTime && (
+          <Text style={styles.selectedTimeText}>
+            {selectedTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          </Text>
+        )}
+      </TouchableOpacity>
+      
+      {showTimePicker && (
+        <View style={styles.timePickerContainer}>
+          <DateTimePicker
+            value={selectedTime}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+            onChange={handleTimePickerChange}
+            style={styles.timePicker}
+          />
+          
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity 
+              style={styles.confirmButton}
+              onPress={handleConfirmTime}
+            >
+              <Text style={styles.buttonText}>OK</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
+      {/* Audio Picker Section */}
       <View style={styles.pickerContainer}>
-        {Platform.OS === 'web' ? (
-          <select
-            value={selectedAudio}
-            onChange={(e) => setSelectedAudio(e.target.value)}
-            style={styles.select}
-          >
-            {audioOptions.map((audio) => (
-              <option key={audio} value={audio}>
-                {audio}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Picker
-            selectedValue={selectedAudio}
-            onValueChange={(itemValue: SetStateAction<string>) => setSelectedAudio(itemValue)}
-            style={styles.picker}
-          >
-            {audioOptions.map((audio) => (
-              <Picker.Item key={audio} label={audio} value={audio} />
-            ))}
-          </Picker>
-        )}
+        <Picker
+          selectedValue={selectedAudio}
+          onValueChange={(itemValue: SetStateAction<string>) => setSelectedAudio(itemValue)}
+          style={styles.picker}
+        >
+          {audioOptions.map((audio) => (
+            <Picker.Item key={audio} label={audio} value={audio} />
+          ))}
+        </Picker>
       </View>
 
+      {/* Set Alarm Button */}
       <TouchableOpacity style={styles.setButton} onPress={handleSetAlarm}>
         <Text style={styles.setButtonText}>Set Alarm</Text>
       </TouchableOpacity>
 
+      {/* Alarms List */}
       <ScrollView style={styles.alarmsList}>
         <Text style={styles.alarmsHeader}>Upcoming Alarms:</Text>
         {upcoming.map((alarm) => (
@@ -287,10 +396,11 @@ export default function SmartAlarm() {
         ))}
       </ScrollView>
 
+      {/* Alarm Ringing Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={false}>
         <View style={[styles.fullScreenModal, { backgroundColor: '#0f172a' }]}>
-          <Text style={styles.modalTitle}>Alarm Ringing! 🔔</Text>
-          <Text style={styles.modalSubtitle}>Mode: {mode === 'puzzle' ? 'Solve Puzzle' : 'To-Do List'}</Text>
+          <Text style={styles.modalTitle}>Alarm Ringing! </Text>
+          
 
           {mode === 'puzzle' ? (
             <PuzzleComponent
@@ -319,6 +429,9 @@ export default function SmartAlarm() {
   );
 }
 
+
+
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -332,15 +445,46 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     marginBottom: 12,
   },
-  input: {
-    height: 40,
-    borderColor: '#94a3b8',
+  timeInputButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+    borderColor: '#3b82f6',
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     marginBottom: 12,
-    backgroundColor: '#f1f5f9',
-    color: '#0f172a',
+    backgroundColor: '#1e293b',
+  },
+  timeInputText: {
+    color: '#f8fafc',
+    marginLeft: 10,
+    fontSize: 16,
+  },
+  selectedTimeText: {
+    marginLeft: 'auto',
+    color: '#3b82f6',
+    fontWeight: 'bold',
+  },
+  timePickerContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 12,
+  },
+  timePicker: {
+    width: '100%',
+  },
+  confirmButton: {
+    backgroundColor: '#3b82f6',
+    padding: 10,
+    borderRadius: 5,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   pickerContainer: {
     marginBottom: 12,
@@ -349,20 +493,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     borderRadius: 8,
   },
-  select: {
-    height: 40,
-    width: '100%',
-    borderRadius: 8,
-    backgroundColor: '#e2e8f0',
-    paddingHorizontal: 10,
-  },
   setButton: {
     backgroundColor: '#3b82f6',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'stretch',
     marginBottom: 16,
   },
   setButtonText: {

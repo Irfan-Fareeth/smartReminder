@@ -9,6 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import ToDoList from './ToDoList';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -50,7 +51,7 @@ const Header = ({ isTodoVisible, onToggleView }) => {
         <TouchableOpacity onPress={toggleDrawer} style={styles.menuButton}>
           <Ionicons name="menu" size={28} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerText}>SmartReminder</Text>
+        <Text style={styles.headerText}>{!isTodoVisible?"SmartAlarm":"ToDoList"}</Text>
         <TouchableOpacity onPress={onToggleView} style={styles.toggleButton}>
           <Ionicons
             name={isTodoVisible ? 'alarm-outline' : 'checkmark-done-outline'}

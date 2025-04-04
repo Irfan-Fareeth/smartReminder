@@ -45,6 +45,11 @@ const logicQuestions = [
   },
 ];
 
+const generateRandomString = (length = 10) => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
 const PuzzleComponent: React.FC<Props> = ({
   puzzleAnswer,
   setPuzzleAnswer,
@@ -52,17 +57,18 @@ const PuzzleComponent: React.FC<Props> = ({
   onSnooze,
   onStop,
 }) => {
-  const [puzzleType, setPuzzleType] = useState<'math' | 'scramble' | 'logic' | 'memory'>('math');
+  const [puzzleType, setPuzzleType] = useState<'math' | 'scramble' | 'logic' | 'memory' | 'displayword'>('math');
   const [correctWord, setCorrectWord] = useState('cat');
   const [scrambledWord, setScrambledWord] = useState(scrambleWord('cat'));
   const [logicQ, setLogicQ] = useState(logicQuestions[0]);
   const [colorSequence, setColorSequence] = useState<string[]>([]);
   const [showColors, setShowColors] = useState(false);
   const [isPuzzleStarted, setIsPuzzleStarted] = useState(false);
+  const [displayWord, setDisplayWord] = useState(generateRandomString());
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   const setupPuzzle = () => {
-    const types = ['math', 'scramble', 'logic', 'memory'] as const;
+    const types = ['math', 'scramble', 'logic', 'memory', 'displayword'] as const;
     const randomType = types[Math.floor(Math.random() * types.length)];
     setPuzzleType(randomType);
     setPuzzleAnswer('');
@@ -80,6 +86,9 @@ const PuzzleComponent: React.FC<Props> = ({
       setColorSequence(sequence);
       setShowColors(true);
       setTimeout(() => setShowColors(false), 5000);
+    } else if (randomType === 'displayword') {
+      const randomString = generateRandomString();
+      setDisplayWord(randomString);
     }
 
     fadeAnim.setValue(0);
@@ -98,6 +107,7 @@ const PuzzleComponent: React.FC<Props> = ({
   const isMemoryCorrect =
     puzzleAnswer.trim().toLowerCase().replace(/\s+/g, '') ===
     colorSequence.join('').toLowerCase();
+  const isDisplayWordCorrect = puzzleAnswer.trim().toLowerCase() === displayWord.toLowerCase();
 
   const solved =
     puzzleType === 'math'
@@ -106,13 +116,19 @@ const PuzzleComponent: React.FC<Props> = ({
       ? isScrambleCorrect
       : puzzleType === 'logic'
       ? isLogicCorrect
-      : isMemoryCorrect;
+      : puzzleType === 'memory'
+      ? isMemoryCorrect
+      : isDisplayWordCorrect;
 
   const handlePuzzleAction = (action: 'snooze' | 'stop') => {
     if (!isPuzzleStarted) return;
     if (solved) {
       action === 'snooze' ? onSnooze() : onStop();
     }
+  };
+
+  const handleLogicOptionPress = (option: string) => {
+    if (isPuzzleStarted) setPuzzleAnswer(option);
   };
 
   return (
@@ -122,23 +138,31 @@ const PuzzleComponent: React.FC<Props> = ({
           <Text style={styles.blurText}>Tap anywhere to begin puzzle to snooze or stop</Text>
         </TouchableOpacity>
       )}
-
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        <Text style={styles.header}>Solve to Dismiss</Text>
+        
 
         {puzzleType === 'math' && <Text style={styles.puzzleText}>What is 3 + 4?</Text>}
 
         {puzzleType === 'scramble' && (
           <Text style={styles.puzzleText}>
-            Unscramble this:{' '}
-            <Text style={styles.scrambledWord}>{scrambledWord.toUpperCase()}</Text>
+            Unscramble this: <Text style={styles.scrambledWord}>{scrambledWord.toUpperCase()}</Text>
           </Text>
         )}
 
         {puzzleType === 'logic' && (
           <>
             <Text style={styles.puzzleText}>{logicQ.question}</Text>
-            <Text style={styles.logicOptions}>{logicQ.options.join('   ')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {logicQ.options.map((opt, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => handleLogicOptionPress(opt)}
+                  style={styles.optionButton}
+                >
+                  <Text style={styles.optionText}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </>
         )}
 
@@ -147,6 +171,12 @@ const PuzzleComponent: React.FC<Props> = ({
             {showColors
               ? `Memorize: ${colorSequence.join(' - ')}`
               : 'Enter the color sequence (no spaces)'}
+          </Text>
+        )}
+
+        {puzzleType === 'displayword' && (
+          <Text style={styles.puzzleText}>
+            Type this word exactly: <Text style={styles.scrambledWord}>{displayWord}</Text>
           </Text>
         )}
 
@@ -304,5 +334,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 20,
     textAlign: 'center',
+  },
+  optionButton: {
+    backgroundColor: '#1e293b',
+    padding: 10,
+    margin: 5,
+    borderRadius: 10,
+    borderColor: '#38bdf8',
+    borderWidth: 1,
+  },
+  optionText: {
+    color: '#38bdf8',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
