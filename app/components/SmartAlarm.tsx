@@ -30,6 +30,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
+
 export default function SmartAlarm() {
   // State variables
   const [alarms, setAlarms] = useState<{ time: string; audio: string; id: string; notificationId?: string }[]>([]);
@@ -45,6 +46,11 @@ export default function SmartAlarm() {
   const [puzzleAnswer, setPuzzleAnswer] = useState('');
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const [selectedHour, setSelectedHour] = useState('');
+const [selectedMinute, setSelectedMinute] = useState('');
+const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
+
   const [selectedTime, setSelectedTime] = useState(() => {
     if (tempTime) {
       const [hours, minutes] = tempTime.split(':').map(Number);
@@ -58,12 +64,16 @@ export default function SmartAlarm() {
 
   // Constants
   const isPuzzleSolved = puzzleAnswer.trim() === '7';
-  const audioOptions = ['default', 'beep', 'chime', 'ringtone'];
+  const audioOptions = ['default', 'Saachitaley', 'Avesham', 'Puli','Govindha','SrinivasaGovindha','VadivelSleep1','VadivelSleep2' ];
   const audioFiles: Record<string, any> = {
     default: require('../../assets/vizhiye.mp3'),
-    beep: require('../../assets/saachitale.mp3'),
-    chime: require('../../assets/avesham.mp3'),
-    ringtone: require('../../assets/avesham.mp3'),
+    Saachitaley: require('../../assets/saachitale.mp3'),
+    Avesham: require('../../assets/avesham.mp3'),
+    Puli: require('../../assets/Puli-Urumudhu.mp3'),
+    Govindha: require('../../assets/HGovinda.mp3'),
+    SrinivasaGovindha: require('../../assets/GovindhaAkka.mp3'),
+    VadivelSleep1: require('../../assets/Vadivel Sleep.mp3'),
+    VadivelSleep2: require('../../assets/SleepVadivel.mp3'),
   };
 
   // Load alarms from storage on component mount
@@ -155,55 +165,79 @@ export default function SmartAlarm() {
 
   // Set alarm function
   const handleSetAlarm = async () => {
-    if (tempTime) {
-      const alarmId = `${tempTime}-${selectedAudio}`;
+    if (selectedHour && selectedMinute) {
+      let hour = parseInt(selectedHour);
+      const minute = parseInt(selectedMinute);
+  
+      if (selectedAMPM === 'PM' && hour !== 12) hour += 12;
+      if (selectedAMPM === 'AM' && hour === 12) hour = 0;
+  
+      const formattedHour = hour.toString().padStart(2, '0');
+      const formattedMinute = minute.toString().padStart(2, '0');
+      const timeStr = `${formattedHour}:${formattedMinute}`;
+  
+      const alarmId = `${timeStr}-${selectedAudio}`;
       const exists = alarms.some((a) => a.id === alarmId);
       if (exists) {
         Alert.alert('Alarm already exists!');
         return;
       }
-
-      const [h, m] = tempTime.split(':').map(Number);
+  
       const now = new Date();
-      const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+      const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0);
       if (alarmDate <= now) alarmDate.setDate(alarmDate.getDate() + 1);
-
+  
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: '⏰ Alarm Alert',
-          body: `Alarm set for ${tempTime}`,
+          body: `Alarm set for ${formattedHour}:${formattedMinute}`,
           sound: true,
         },
         trigger: alarmDate,
       });
-
-      const newAlarm = { 
-        time: tempTime, 
-        audio: selectedAudio, 
+  
+      const newAlarm = {
+        time: timeStr,
+        audio: selectedAudio,
         id: alarmId,
-        notificationId: notificationId 
+        notificationId,
       };
-      
+  
       setAlarms((prev) => [...prev, newAlarm]);
       setSelectedAudio('default');
+      setSelectedHour('');
+      setSelectedMinute('');
+      setSelectedAMPM('AM');
     }
   };
+  
 
   // Time tracking effect
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
+      const rawHours = now.getHours();
+      const hours = (rawHours % 12 || 12).toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       const seconds = now.getSeconds().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-      const timeWithSeconds = `${hours}:${minutes}:${seconds}`;
-
+      const ampm = rawHours >= 12 ? 'PM' : 'AM';
+      
+      const timeString = `${hours}:${minutes} ${ampm}`;
+      const timeWithSeconds = `${hours}:${minutes}:${seconds} ${ampm}`;
+  
       setCurrentTime(timeWithSeconds);
-
+  
       alarms.forEach((alarm) => {
+        const alarmTimeWithAMPM = (() => {
+          const [alarmHour, alarmMinute] = alarm.time.split(':');
+          let alarmHourNum = parseInt(alarmHour, 10);
+          const alarmAMPM = alarmHourNum >= 12 ? 'PM' : 'AM';
+          alarmHourNum = alarmHourNum % 12 || 12;
+          return `${alarmHourNum.toString().padStart(2, '0')}:${alarmMinute} ${alarmAMPM}`;
+        })();
+  
         const key = `${alarm.time}-${alarm.audio}`;
-        if (alarm.time === timeString && seconds === '00' && !triggeredAlarms.has(key)) {
+        if (alarmTimeWithAMPM === timeString && seconds === '00' && !triggeredAlarms.has(key)) {
           if (currentlyRinging === null) {
             setCurrentlyRinging(key);
             playAudio(alarm.audio, key);
@@ -214,10 +248,10 @@ export default function SmartAlarm() {
         }
       });
     }, 1000);
-
+  
     return () => clearInterval(interval);
   }, [alarms, triggeredAlarms, currentlyRinging]);
-
+  
   // Audio functions
   const playAudio = async (audio: string, key: string) => {
     try {
@@ -310,54 +344,49 @@ export default function SmartAlarm() {
     <View style={styles.container}>
       <Text style={styles.currentTimeText}>Current Time: {currentTime}</Text>
 
-      {/* Time Picker Section */}
-      <TouchableOpacity 
-        onPress={() => {
-          const initialTime = tempTime 
-            ? (() => {
-                const [hours, minutes] = tempTime.split(':').map(Number);
-                const date = new Date();
-                date.setHours(hours);
-                date.setMinutes(minutes);
-                return date;
-              })()
-            : new Date();
-          setSelectedTime(initialTime);
-          setShowTimePicker(true);
-        }}
-        style={styles.timeInputButton}
-      >
-        <MaterialIcons name="access-time" size={24} color="#3b82f6" />
-        <Text style={styles.timeInputText}>
-          {tempTime || 'Select Alarm Time'}
-        </Text>
-        {tempTime && (
-          <Text style={styles.selectedTimeText}>
-            {selectedTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-          </Text>
-        )}
-      </TouchableOpacity>
-      
-      {showTimePicker && (
-        <View style={styles.timePickerContainer}>
-          <DateTimePicker
-            value={selectedTime}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-            onChange={handleTimePickerChange}
-            style={styles.timePicker}
-          />
-          
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity 
-              style={styles.confirmButton}
-              onPress={handleConfirmTime}
-            >
-              <Text style={styles.buttonText}>OK</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      <View style={styles.timeInputRow}>
+  <TextInput
+    style={styles.timeInputBox}
+    placeholder="HH"
+    placeholderTextColor="#94a3b8"
+    value={selectedHour}
+    onChangeText={(text) => {
+      const hour = text.replace(/[^0-9]/g, '');
+      setSelectedHour(hour);
+      if(hour<0 || hour>12) 
+        { alert('enter valid time');
+          setSelectedHour('');
+        }
+    }}
+    keyboardType="number-pad"
+    maxLength={2}
+  />
+  <Text style={{ color: '#f8fafc', fontSize: 20, marginHorizontal: 4 }}>:</Text>
+  <TextInput
+    style={styles.timeInputBox}
+    placeholder="MM"
+    placeholderTextColor="#94a3b8"
+    value={selectedMinute}
+    onChangeText={(text) => {
+      const min = text.replace(/[^0-9]/g, '');
+      setSelectedMinute(min);
+    }}
+    keyboardType="number-pad"
+    maxLength={2}
+  />
+   <Text style={styles.ampm}>{selectedAMPM}</Text>
+   <Picker
+    selectedValue="AM"
+    onValueChange={(value) => setSelectedAMPM(value)}
+    style={styles.ampmPicker}
+  >
+    <Picker.Item label="AM" value="AM" />
+    <Picker.Item label="PM" value="PM" />
+  </Picker>
+
+</View>
+
+
 
       {/* Audio Picker Section */}
       <View style={styles.pickerContainer}>
@@ -525,6 +554,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  ampm: {
+    color:'white',
+  },
   fullScreenModal: {
     flex: 1,
     justifyContent: 'center',
@@ -552,4 +584,47 @@ const styles = StyleSheet.create({
     width: 240,
     textAlign: 'center',
   },
+  manualTimeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: '#1e293b',
+    height: 50,
+  },
+  manualTimeInput: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  timeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  timeInputBox: {
+    backgroundColor: '#1e293b',
+    color: '#f8fafc',
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    width: 60,
+    height: 50,
+    textAlign: 'center',
+  },
+  ampmPicker: {
+    width: 100,
+    height: 50,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  
 });

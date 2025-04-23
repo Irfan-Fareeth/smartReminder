@@ -65,6 +65,7 @@ const PuzzleComponent: React.FC<Props> = ({
   const [showColors, setShowColors] = useState(false);
   const [isPuzzleStarted, setIsPuzzleStarted] = useState(false);
   const [displayWord, setDisplayWord] = useState(generateRandomString());
+  const [memoryStarted, setMemoryStarted] = useState(false); // Tracks if user started memory puzzle
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   const setupPuzzle = () => {
@@ -73,6 +74,8 @@ const PuzzleComponent: React.FC<Props> = ({
     setPuzzleType(randomType);
     setPuzzleAnswer('');
     setIsPuzzleStarted(false);
+    setShowColors(false);
+    setMemoryStarted(false); // Reset memory start flag
 
     if (randomType === 'scramble') {
       const newWord = wordList[Math.floor(Math.random() * wordList.length)];
@@ -84,8 +87,6 @@ const PuzzleComponent: React.FC<Props> = ({
     } else if (randomType === 'memory') {
       const sequence = getRandomColorSequence(4);
       setColorSequence(sequence);
-      setShowColors(true);
-      setTimeout(() => setShowColors(false), 5000);
     } else if (randomType === 'displayword') {
       const randomString = generateRandomString();
       setDisplayWord(randomString);
@@ -97,6 +98,15 @@ const PuzzleComponent: React.FC<Props> = ({
       duration: 600,
       useNativeDriver: true,
     }).start();
+  };
+
+  const handleStartPuzzle = () => {
+    setIsPuzzleStarted(true);
+    if (puzzleType === 'memory') {
+      setMemoryStarted(true); // Mark that user started memory puzzle
+      setShowColors(true); // Now show the colors
+      setTimeout(() => setShowColors(false), 5000); // Hide after 5 seconds
+    }
   };
 
   useEffect(setupPuzzle, []);
@@ -134,13 +144,11 @@ const PuzzleComponent: React.FC<Props> = ({
   return (
     <View style={{ position: 'relative', width: '100%' }}>
       {!isPuzzleStarted && (
-        <TouchableOpacity style={styles.blurOverlay} onPress={() => setIsPuzzleStarted(true)}>
+        <TouchableOpacity style={styles.blurOverlay} onPress={handleStartPuzzle}>
           <Text style={styles.blurText}>Tap anywhere to begin puzzle to snooze or stop</Text>
         </TouchableOpacity>
       )}
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        
-
         {puzzleType === 'math' && <Text style={styles.puzzleText}>What is 3 + 4?</Text>}
 
         {puzzleType === 'scramble' && (
@@ -168,9 +176,11 @@ const PuzzleComponent: React.FC<Props> = ({
 
         {puzzleType === 'memory' && (
           <Text style={styles.puzzleText}>
-            {showColors
+            {showColors && memoryStarted
               ? `Memorize: ${colorSequence.join(' - ')}`
-              : 'Enter the color sequence (no spaces)'}
+              : isPuzzleStarted
+              ? 'Enter the color sequence (no spaces)'
+              : 'Memory sequence will appear after you start'}
           </Text>
         )}
 
@@ -241,12 +251,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#f8fafc',
     fontWeight: '600',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  logicOptions: {
-    fontSize: 18,
-    color: '#94a3b8',
     marginBottom: 12,
     textAlign: 'center',
   },
