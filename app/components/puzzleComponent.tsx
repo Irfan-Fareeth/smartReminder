@@ -14,6 +14,7 @@ type Props = {
   isPuzzleSolved: boolean;
   onSnooze: () => void;
   onStop: () => void;
+  reminderTask?: string;
 };
 
 const wordList = ['cat', 'plant', 'alarm', 'react', 'clock', 'night', 'smart', 'brain'];
@@ -30,8 +31,8 @@ const getRandomColorSequence = (length: number) => {
 const logicQuestions = [
   {
     question: 'Which is the largest number?',
-    options: ['7', '3', '9', '5'],
-    answer: '9',
+    options: ['71213', '71312', '72563', '72932'],
+    answer: '72932',
   },
   {
     question: 'Which one does not belong?',
@@ -40,8 +41,8 @@ const logicQuestions = [
   },
   {
     question: 'Which number is odd?',
-    options: ['2', '6', '4', '5'],
-    answer: '5',
+    options: ['231', '646', '0', '512'],
+    answer: '231',
   },
 ];
 
@@ -56,6 +57,7 @@ const PuzzleComponent: React.FC<Props> = ({
   isPuzzleSolved,
   onSnooze,
   onStop,
+  reminderTask,
 }) => {
   const [puzzleType, setPuzzleType] = useState<'math' | 'scramble' | 'logic' | 'memory' | 'displayword'>('math');
   const [correctWord, setCorrectWord] = useState('cat');
@@ -145,10 +147,20 @@ const PuzzleComponent: React.FC<Props> = ({
     <View style={{ position: 'relative', width: '100%' }}>
       {!isPuzzleStarted && (
         <TouchableOpacity style={styles.blurOverlay} onPress={handleStartPuzzle}>
-          <Text style={styles.blurText}>Tap anywhere to begin puzzle to snooze or stop</Text>
+<View style={styles.blurText}>
+  {reminderTask && <Text style={styles.blurLine}>Reminder: {reminderTask}</Text>}
+  <Text style={styles.tapanywhere}>Tap anywhere to begin puzzle to snooze or stop</Text>
+</View>
+
         </TouchableOpacity>
       )}
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      {reminderTask && (
+          <View style={styles.reminderContainer}>
+            <Text style={{color:'#38bdf8'}}>REMINDER: </Text>
+            <Text style={styles.reminderText}>{reminderTask}</Text>
+          </View>
+        )}
         {puzzleType === 'math' && <Text style={styles.puzzleText}>What is 3 + 4?</Text>}
 
         {puzzleType === 'scramble' && (
@@ -234,90 +246,96 @@ export default PuzzleComponent;
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 0,
+    padding: 24,
+    paddingTop: 10,
     backgroundColor: '#0f172a',
-    borderRadius: 20,
+    borderRadius: 16,
     marginHorizontal: 10,
-    elevation: 6,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 6,
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#38bdf8',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   puzzleText: {
-    fontSize: 20,
-    color: '#f8fafc',
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 18,
+    color: '#e2e8f0',
+    fontWeight: '500',
+    marginBottom: 14,
     textAlign: 'center',
   },
   scrambledWord: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#38bdf8',
   },
   input: {
-    width: 220,
+    width: 240,
     backgroundColor: '#1e293b',
-    color: '#f8fafc',
+    color: '#f1f5f9',
     borderColor: '#38bdf8',
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    fontSize: 18,
-    marginTop: 5,
+    paddingHorizontal: 16,
+    fontSize: 17,
+    marginTop: 8,
     textAlign: 'center',
   },
   hint: {
     color: '#f87171',
-    marginTop: 12,
+    marginTop: 14,
     fontWeight: '500',
+    fontStyle: 'italic',
   },
   controlButtons: {
     flexDirection: 'row',
-    marginTop: 30,
-    justifyContent: 'space-between',
+    marginTop: 32,
+    justifyContent: 'space-evenly',
+    width: '100%',
   },
   snoozeButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-    marginRight: 10,
-    shadowColor: '#93c5fd',
+    backgroundColor: '#2563eb',
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+    shadowColor: '#60a5fa',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
     elevation: 4,
   },
   stopButton: {
-    backgroundColor: '#ef4444',
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 12,
+    backgroundColor: '#dc2626',
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 10,
     shadowColor: '#f87171',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
     elevation: 4,
   },
   controlButtonText: {
-    color: '#fff',
+    color: '#f8fafc',
     fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   refreshButton: {
-    marginTop: 20,
+    marginTop: 22,
     backgroundColor: '#1e293b',
     paddingVertical: 10,
-    paddingHorizontal: 25,
+    paddingHorizontal: 22,
     borderRadius: 10,
     borderColor: '#38bdf8',
-    borderWidth: 1,
+    borderWidth: 1.2,
   },
   refreshText: {
     color: '#38bdf8',
@@ -326,30 +344,70 @@ const styles = StyleSheet.create({
   },
   blurOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgb(11, 32, 77)',
     zIndex: 10,
+    
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 20,
   },
   blurText: {
-    color: '#94a3b8',
-    fontSize: 16,
-    fontWeight: '600',
-    paddingHorizontal: 20,
-    textAlign: 'center',
+    paddingHorizontal: 24,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 20, // optional: adds spacing between lines (requires RN >= 0.71)
   },
+  
+  blurLine: {
+    color: 'aqua',
+    fontSize: 27,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 32,
+  },
+  tapanywhere: {
+      color: 'white',
+      fontSize: 17,
+      fontWeight: '200',
+      textAlign: 'center',
+      lineHeight: 32,
+
+  },
+  
   optionButton: {
     backgroundColor: '#1e293b',
-    padding: 10,
-    margin: 5,
-    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    margin: 6,
+    borderRadius: 8,
     borderColor: '#38bdf8',
-    borderWidth: 1,
+    borderWidth: 1.2,
+    minWidth: 80,
+    alignItems: 'center',
   },
   optionText: {
     color: '#38bdf8',
     fontWeight: '600',
+    fontSize: 15,
+  },
+  reminderContainer: {
+
+    padding: 12,
+
+    marginBottom: 16,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+  borderColor: '#38bdf8',
+   borderWidth: 1.5,
+    borderRadius: 10,
+  },
+  reminderText: {
+    color: '#ffffff',
     fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
+

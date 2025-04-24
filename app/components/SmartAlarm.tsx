@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { SetStateAction, useEffect, useState } from 'react';
 import { Picker } from '@react-native-picker/picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
@@ -33,7 +32,14 @@ Notifications.setNotificationHandler({
 
 export default function SmartAlarm() {
   // State variables
-  const [alarms, setAlarms] = useState<{ time: string; audio: string; id: string; notificationId?: string }[]>([]);
+ const [alarms, setAlarms] = useState<{ 
+    time: string; 
+    audio: string; 
+    id: string; 
+    notificationId?: string;
+    reminderTask?: string;
+  }[]>([]);
+
   const [tempTime, setTempTime] = useState('');
   const [selectedAudio, setSelectedAudio] = useState('default');
   const [currentTime, setCurrentTime] = useState('');
@@ -50,6 +56,8 @@ export default function SmartAlarm() {
   const [selectedHour, setSelectedHour] = useState('');
 const [selectedMinute, setSelectedMinute] = useState('');
 const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
+const [reminderTask, setReminderTask] = useState('');
+const [showReminderInput, setShowReminderInput] = useState(false);
 
   const [selectedTime, setSelectedTime] = useState(() => {
     if (tempTime) {
@@ -201,6 +209,7 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
         audio: selectedAudio,
         id: alarmId,
         notificationId,
+        reminderTask: reminderTask || undefined,
       };
   
       setAlarms((prev) => [...prev, newAlarm]);
@@ -208,6 +217,8 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
       setSelectedHour('');
       setSelectedMinute('');
       setSelectedAMPM('AM');
+      setReminderTask('');
+      setShowReminderInput(false);
     }
   };
   
@@ -340,6 +351,20 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
 
   const { upcoming, past } = getUpcomingAndPast();
 
+  const convertTo12HourFormat = (time24) => {
+    const [hours, minutes] = time24.split(':');
+    let period = 'AM';
+    let hours12 = parseInt(hours, 10);
+    
+    if (hours12 >= 12) {
+      period = 'PM';
+      if (hours12 > 12) hours12 -= 12;
+    }
+    
+    if (hours12 === 0) hours12 = 12; // Handle midnight (00:00)
+    
+    return `${hours12}:${minutes} ${period}`;
+  };
   return (
     <View style={styles.container}>
       <Text style={styles.currentTimeText}>Current Time: {currentTime}</Text>
@@ -400,7 +425,32 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
           ))}
         </Picker>
       </View>
-
+      
+      {showReminderInput ? (
+        <View style={styles.reminderInputContainer}>
+          <TextInput
+            style={styles.reminderInput}
+            placeholder="Add a reminder task (optional)"
+            placeholderTextColor="#94a3b8"
+            value={reminderTask}
+            onChangeText={setReminderTask}
+            multiline
+          />
+          <TouchableOpacity 
+            style={styles.closeReminderButton} 
+            onPress={() => setShowReminderInput(false)}
+          >
+            <MaterialIcons name="close" size={20} color="#f8fafc" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity 
+          style={styles.addReminderButton}
+          onPress={() => setShowReminderInput(true)}
+        >
+          <Text style={styles.addReminderButtonText}>+ Add Reminder Task</Text>
+        </TouchableOpacity>
+      )}
       {/* Set Alarm Button */}
       <TouchableOpacity style={styles.setButton} onPress={handleSetAlarm}>
         <Text style={styles.setButtonText}>Set Alarm</Text>
@@ -411,7 +461,12 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
         <Text style={styles.alarmsHeader}>Upcoming Alarms:</Text>
         {upcoming.map((alarm) => (
           <View key={alarm.id} style={styles.alarmItem}>
-            <Text style={{ color: '#f8fafc' }}>• {alarm.time} - Audio: {alarm.audio}</Text>
+            <View style={styles.alarmInfo}>
+              <Text style={{ color: '#f8fafc' }}>{convertTo12HourFormat(alarm.time)} - Audio: {alarm.audio}</Text>
+              {alarm.reminderTask && (
+                <Text style={styles.reminderText}>Reminder: {alarm.reminderTask}</Text>
+              )}
+            </View>
             <Button title="Delete" color="red" onPress={() => deleteAlarm(alarm.id)} />
           </View>
         ))}
@@ -419,12 +474,16 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
         <Text style={[styles.alarmsHeader, { marginTop: 20 }]}>Past Alarms:</Text>
         {past.map((alarm) => (
           <View key={alarm.id} style={styles.alarmItem}>
-            <Text style={{ color: '#f8fafc' }}>• {alarm.time} - Audio: {alarm.audio}</Text>
+            <View style={styles.alarmInfo}>
+              <Text style={{ color: '#f8fafc' }}>{convertTo12HourFormat(alarm.time)} - Audio: {alarm.audio}</Text>
+              {alarm.reminderTask && (
+                <Text style={styles.reminderText}>Reminder: {alarm.reminderTask}</Text>
+              )}
+            </View>
             <Button title="Delete" color="red" onPress={() => deleteAlarm(alarm.id)} />
           </View>
         ))}
       </ScrollView>
-
       {/* Alarm Ringing Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={false}>
         <View style={[styles.fullScreenModal, { backgroundColor: '#0f172a' }]}>
@@ -438,6 +497,7 @@ const [selectedAMPM, setSelectedAMPM] = useState<'AM' | 'PM'>('AM');
               isPuzzleSolved={isPuzzleSolved}
               onSnooze={snoozeAlarm}
               onStop={stopAlarm}
+              reminderTask={alarms.find(a => a.id === currentlyRinging)?.reminderTask}
             />
           ) : (
             <View>
@@ -554,8 +614,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  alarmInfo: {
+    flex: 1,
+  },
+  reminderText: {
+    color: '#86efac',
+    fontSize: 12,
+    marginTop: 4,
+  },
   ampm: {
-    color:'white',
+    color: 'white',
   },
   fullScreenModal: {
     flex: 1,
@@ -626,5 +694,74 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 8,
   },
-  
+  addReminderButton: {
+    backgroundColor: '#1e293b',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+  },
+  addReminderButtonText: {
+    color: '#3b82f6',
+    fontWeight: 'bold',
+  },
+  reminderInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+  },
+  reminderInput: {
+    flex: 1,
+    color: '#f8fafc',
+    paddingVertical: 10,
+    minHeight: 40,
+  },
+  closeReminderButton: {
+    padding: 8,
+  },
+  reminderContainer: {
+    backgroundColor: '#1e293b',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    alignItems: 'center',
+  },
+  reminderTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fbbf24',
+    marginBottom: 10,
+  },
+  reminderContent: {
+    fontSize: 18,
+    color: '#f8fafc',
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+    justifyContent: 'space-around',
+    width: '80%',
+  },
+  snoozeButton: {
+    backgroundColor: '#f59e0b',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  stopButton: {
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
 });
